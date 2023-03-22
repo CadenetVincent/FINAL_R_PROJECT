@@ -1,0 +1,1256 @@
+---
+title: "FINAL WORK CADENET VINCENT - DASHBOARD ANALYTICS WITH R"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+# CADENET Vincent
+# EM Lyon
+# Dashboard analytics with R
+
+##install.packages("tidyverse") 
+##install.packages("shiny")             
+##install.packages("shinydashboard")    
+##install.packages("DT")   
+##install.packages("readxl")
+##install.packages("plotly")    
+##install.packages("gganimate")   
+##install.packages("ggrepel")
+##install.packages("cowplot")
+##install.packages("ggplot2")
+
+#install.packages("sf")   
+#install.packages("terra")
+#install.packages("dplyr")    
+#install.packages("spData")   
+#install.packages("tmap")
+#install.packages("leaflet")
+#install.packages('rsconnect')
+#install.packages("leaflet.providers")
+#install.packages("psych")
+#install.packages("psychTools")
+#install.packages("GPArotation")
+#install.packages("factoextra")
+#install.packages("FactoMineR")
+#install.packages("shinydashboard")
+#install.packages("shinyWidgets")
+#install.packages("shinyjs")
+
+library(shinyWidgets)
+library(shinydashboard)
+library(FactoMineR)
+library(GPArotation)
+library(sf)
+library(terra)
+library(dplyr)
+library(spData)
+library(tmap)    
+library(leaflet) 
+library(gganimate)
+library(shinyjs)
+
+library(tidyverse)
+library(shiny)
+library(shinydashboard)
+library(DT)
+library(readxl)
+library(plotly)
+library(gganimate)
+library(ggrepel)
+library(cowplot)
+library(ggplot2)
+library(rsconnect)
+library(leaflet.providers)
+library(psych)
+library(psychTools)
+library(cluster)
+library(factoextra)
+library(gridExtra)
+
+
+#install.packages("shinythemes")
+library("shinythemes")
+
+#"C:/Users/***/Documents/CADENET_Vincent_FINAL_PROJECT_DASHBOARD_ANALYTICS/CODE"
+
+# Define the wks directory path and get the current one
+getwd()
+setwd("../CODE") #/ setwd("../DATA")
+load("file_shark.RData")
+
+# OPEN Excel file with data
+file_shark <- read_excel('../DATA/death_shark_dataset_review.xlsx')
+
+# Save the workspace directory
+# save(file_shark,file = "file_shark.RData")
+# load("file_shark.RData")
+
+
+
+    # Realise the Factor Analysis of Mixed Data (FAMD)
+  # See the documentation bellow : http://www.sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/115-famd-factor-analysis-of-mixed-data-in-r-essentials/
+  # ncp refer to the number of dimensions, sup.var and ind.sup for the index of new variable/instance...
+
+#as.numeric(as.character(value$Age))
+  
+# Select choice sharks without "No identified" or "No species"
+shark_without_no_id_value = file_shark %>%
+filter(Species != "No identified shark" & Species != "No species")
+
+list_shark_img <- list()
+list_shark_img[["White shark"]] <- "www/white_shark.jpg"
+list_shark_img[["Tiger shark"]] <- "www/tiger_shark.jpg"
+list_shark_img[["Bull shark"]] <- "www/bull_shark.jpg"
+list_shark_img[["Blacktip shark"]] <- "www/blacktip_shark.jpg"
+
+list_region <- unique(file_shark$SubRegion)
+
+# --- TABLE INFO ZONE ABOUT SHARK ATTACK PER REGION & YEAR --- 
+      
+# filter count attack by region and by year
+get_table_info_shark <- file_shark %>%
+        filter(Species != "No identified shark" & Species != "No species") %>%
+        group_by(Year,Region) %>%
+        summarise(count = n())
+
+get_table_info_shark_per_species <- file_shark %>%
+        filter(Species != "No identified shark" & Species != "No species" & Species %in% c("White shark","Tiger shark","Bull shark","Blacktip shark")) %>%
+        group_by(Year,Region,Species) %>%
+        summarise(count = n())
+
+get_table_info_shark_per_species <- pivot_wider(get_table_info_shark_per_species, names_from = "Species", values_from = "count")
+
+get_table_info_shark[is.na(get_table_info_shark)] <- 0
+get_table_info_shark_per_species[is.na(get_table_info_shark_per_species)] <- 0
+
+get_table_info_shark <- get_table_info_shark %>% group_by(Year)
+get_table_info_shark_per_species <- get_table_info_shark_per_species %>% group_by(Year)
+
+get_table_info_shark <- inner_join(get_table_info_shark,get_table_info_shark_per_species, by=c('Year','Region'))
+
+#cm <- get_table_info_shark
+#get_table_info_shark <- cm
+
+get_table_info_shark <- pivot_wider(get_table_info_shark, names_from = "Region", values_from = count)
+
+get_table_info_shark[is.na(get_table_info_shark)] <- 0
+
+get_table_info_shark <- get_table_info_shark %>% group_by(Year) %>% summarise(across(everything(), sum), .groups = 'drop')
+
+get_table_info_shark_without_year <- get_table_info_shark %>% select(-c("Year","White shark","Tiger shark","Bull shark","Blacktip shark"))
+
+# Get the mean for each year (for each row)
+get_table_info_shark <- get_table_info_shark %>% mutate("Mean of 5 regions" = rowMeans(get_table_info_shark_without_year))
+
+get_table_info_shark <- get_table_info_shark %>% mutate("Sum of 5 regions" = rowSums(get_table_info_shark_without_year))
+
+get_table_info_shark_without_species <- get_table_info_shark %>% select(-c("Year", "Africa","Americas",	"Asia",	"Europe",	"Oceania","Mean of 5 regions","Sum of 5 regions"))
+
+get_table_info_shark <- get_table_info_shark %>% mutate("Mean of 4 Species" = rowMeans(get_table_info_shark_without_species))
+
+get_table_info_shark <- get_table_info_shark %>% mutate("Sum of 4 species" = rowSums(get_table_info_shark_without_species))
+
+get_table_info_shark <- get_table_info_shark %>% mutate("Others species" = rowSums(get_table_info_shark_without_year) - rowSums(get_table_info_shark_without_species))
+
+get_table_info_shark <- get_table_info_shark[,c(1,2,3,4,5,15,13,14,6,7,8,9,10,11,12)]
+
+data_add_info_shark <- get_table_info_shark
+
+get_table_info_shark <- get_table_info_shark %>% select(-c("White shark","Tiger shark","Bull shark","Blacktip shark"))
+
+# ---- FRONT-END / RENDER ------
+
+ui <- fluidPage(
+  tags$style(
+    #CSS
+    HTML("
+      * {
+      font-family: 'Roboto';
+      }
+      body{
+      background-color : whitesmoke;
+      }
+      h3 {
+        text-align : center;
+        color : #363d61;
+        font-weight : bold;
+      }
+      .section_div{
+        background-color : #363d61;
+        color : white;
+        border-color : white;
+        border-radius : 10px;
+        border-width: 5px;
+        padding: 10px;
+      }
+      .tab_title{
+      color : #FF9900;
+      font-weight : bold;
+      }
+      .info_shark{
+        background-color : #FF9900;
+        color : white;
+        border: 5px solid #363d61;
+        border-radius : 10px;
+        padding: 10px;
+        margin-top : 10px;
+      }
+      .title_top {
+      text-align : center;
+      }
+      img {
+       border-radius: 10px;
+      }
+      .title_top > *{
+      color : #FF9900;
+      }
+      .FCA_famd_var_div *{
+      font-size : 10px;
+      }
+         ")
+  ),
+  useShinydashboard(),
+  titlePanel(h2("GLOBAL SHARK ATTACK")),
+  
+  fluidRow(column(3,
+  imageOutput("Image_menu", width = "300px",
+         height = "150px")),
+  column(9,
+  h2("Is the shark so mean ?"),
+  h5("Do not trust the American film directed by Steven Spielberg and released in 1975: 'Jaws'!"),
+  h5("Things have changed since the 2000s"),
+  uiOutput("link_old_dt"),
+  p("Our analysis will provide more insigts to target and learn more about the causes of shark attacks !"))),
+  br(),
+  tabsetPanel(
+
+# ---- First section ...
+# ---- GRAPHICAL ANALYSIS --------
+
+tabPanel(h4(class = "tab_title", id = NULL,"Graphical Analysis"),
+
+br(),
+
+h3("Comparison of two countries - Causes of the attack (provoked or not)"),
+fluidRow(column(6,
+                
+div(class = "section_div", id = NULL,
+    
+fluidRow(column(6,
+# First selector to compare countries provocation and total attack 
+selectInput(inputId = "Fst_choice_compare_cntry_shark", label = "First country choice :", choices = c("Australia", "Bahamas", "Brazil", "New Zealand", "South Africa", "United States", "Egypt", "French Polynesia", "Mexico", "New Caledonia", "Spain"), selected = "Australia")),
+
+column(6,
+# Second selector to compare countries provocation and total attack 
+selectInput(inputId = "Snd_choice_compare_cntry_shark", label = "Second one to compare :", choices = c("Australia", "Bahamas", "Brazil", "New Zealand", "South Africa", "United States", "Egypt", "French Polynesia", "Mexico", "New Caledonia", "Spain", selected = "Brazil"))
+))),p("The dynamic comparison between two countries helps us to better visualise the attacks that took place in two territories and whether they were man-made or purely accidental. Some countries do not allow us to obtain a result, due to insufficient data.")),
+
+column(6,
+# Distribution of attack per type and selected country
+plotOutput("dist_cntries_type"))),
+
+h3("Evaluation by year of the shark attack - Divided by region"),
+
+fluidRow(
+  
+column(12,
+# Distribution of attack per region and year
+plotOutput("dist_cntries_year"))),
+br(),
+p("What better way to understand the distribution of shark attacks per year and per region than with a diagram? We can see that the virus that caused the COVID-19 pandemic and was declared on March 11, 2020 by the World Health Organization (WHO) has impacted this year (by reducing the number of attacks) in terms of incidents, this due to the limitation of exit rights and containment."),
+
+h3("Evaluation by hour of the shark attack - Divided by sub-region"),
+
+fluidRow(
+
+column(6,
+
+# Distribution of attack per hours 
+div(class = "section_div", id = NULL,
+selectInput(inputId = "selectedsubregiontime", label = "Choose specific sub-region of the world", choices = list_region, selected = "Latin America and the Caribbean")),
+fluidRow(
+column(6,
+htmlOutput(outputId = "time_obs")),
+column(6,
+htmlOutput(outputId = "age_obs")),
+)),
+
+  
+column(6,
+# Distribution of attack per hours
+plotOutput("dist_cntries_hours"))),
+br(),
+p("It is useful to know the times that define the key moments for shark attacks. Of course, you have to take into account the number of people in the sea and on the beach, but it is possible that the shark has a schedule during which it has a huge appetite! As an added bonus, you will have indicated on the left hand side of the graph the top 5 times and ages of the victims that were attacked (to assess the variation by sub-region)."),
+
+h3("Activities related to shark species and their correlated region (identify why the attack took place)"),
+
+fluidRow(column(12,
+# Distribution of attack per shark species and activities
+plotOutput("dist_species_activities"))),
+br(),
+p("Why would it not also be interesting to see the causal links between the activities practiced by the victims and the species of shark that attacked them? That's what we've tried to explore in this graph, and the shark species (we've chosen the four most dangerous sharks to make the diagram lighter) that has had the greatest diversity of activities from its victims is the 'Blacktip' (and no, it's not the white shark)."),
+
+h3("Representative curve of the evolution of attack by year and according to the region"),
+
+fluidRow(column(12,
+# Variation of attacks depending on year and region
+plotOutput("dist_time_region_plot"))),
+br(),
+p("Plotting a graph allows us to have a better vision of the evolution of shark attacks by country and by year. Here we can see that Oceania overtook the Americas in terms of attacks in 2009 and that their respective numbers of attacks were equal in 2021. A reason related to containment? Perhaps, but that does not explain everything!"),
+
+),
+
+# ---- Second section ...
+# ---- TIME ANALYSIS --------
+
+tabPanel(h4(class = "tab_title", id = NULL,"Time Analysis"),
+         
+br(),
+
+div(class = "title_top", id = NULL,
+fluidRow(column(3,
+icon("ranking-star", "fa-3x")),
+column(6,
+h3("Top 4 of marine predators in the world")),
+column(3,
+icon("ranking-star", "fa-3x")))),
+
+br(),
+         
+fluidRow(column(3,
+  
+# Value box of the first bigest predator of the world as indicator
+valueBoxOutput("first_bigest_predator",width = 12)),
+column(3,
+  
+# Value box of the scd bigest predator of the world as indicator
+valueBoxOutput("second_bigest_predator",width = 12)),
+
+column(3,
+
+# Value box of the third bigest predator of the world as indicator
+valueBoxOutput("third_bigest_predator",width = 12)), 
+
+column(3,
+  
+# Value box of the fourth bigest predator of the world as indicator
+valueBoxOutput("fourth_bigest_predator",width = 12))),
+
+p("The above four species are the most dangerous and harmful to humans. In this analysis we try to understand the distribution of attacks by shark species and by year. In this way, we will know more about the distribution of attacks and the chances of running into a white shark or a tiger shark... Do not hesitate to use the multiple selector to refine your searches on the table on the details at the bottom of the page !"),
+
+fluidRow(column(12,
+
+div(class = "section_div", id = NULL,
+fluidRow(column(6,
+sliderInput("rng_shark_att_year", "Pick date", value = c(2000, 2023), min = 2000, max = 2023, step = 5)),
+column(6,
+selectInput("mlt_select_shark_spec","Select shark species",
+              names(list_shark_img), multiple = TRUE))
+
+)))),
+br(),
+h3("Shark attack by region, by species (mean/sum) depending on years"),
+fluidRow(column(12,
+# Table of shark attack / year and slider to select years
+DTOutput("table_shark_attack_year")
+)),
+fluidRow(
+  
+  
+column(6,
+div(class = "info_shark", id = NULL,
+fluidRow(
+column(4,
+imageOutput("white_shark_img", width = "120px",
+         height = "60px")),
+column(8,
+h4("White shark"))),
+br(),
+fluidRow(
+column(12,
+htmlOutput("white_shark_form"))))),
+
+column(6,
+div(class = "info_shark", id = NULL,
+fluidRow(
+column(4,
+imageOutput("tiger_shark_img", width = "120px",
+         height = "60px")),
+column(8,
+h4("Tiger shark"))),
+br(),
+fluidRow(
+column(12,
+htmlOutput("tiger_shark_form"))))),
+
+column(6,
+div(class = "info_shark", id = NULL,
+fluidRow(
+column(4,
+imageOutput("bull_shark_img", width = "120px",
+         height = "60px")),
+column(8,
+h4("Bull shark"))),
+br(),
+fluidRow(
+column(12,
+htmlOutput("bull_shark_form"))))),
+
+column(6,
+div(class = "info_shark", id = NULL,
+fluidRow(
+column(4,
+imageOutput("blacktip_img", width = "120px",
+         height = "60px")),
+column(8,
+h4("Blacktip shark"))),
+br(),
+fluidRow(
+column(12,
+htmlOutput("blacktip_form")))))
+
+
+)
+
+),
+
+# ---- third section ...
+# ---- GEOGRAPHICAL ANALYSIS --------
+
+tabPanel(h4(class = "tab_title", id = NULL,"Geographical Analysis"),
+
+h3("Geographical distribution of shark attack by place and species"),
+br(),
+         
+fluidRow(column(6,
+    
+div(class = "section_div", id = NULL,
+    
+# Drop list to get the distribution of attack by countries/region or subregion
+selectInput(inputId = "selectedformatworldmap", label = "Choose mapping format", choices = c("Countries","Sub-regions","Regions"), selected = "Countries"),
+
+# Drop list to get the distribution of attack by species
+selectInput(inputId = "selectedsharkworldmap", label = "Choose shark species", choices = shark_without_no_id_value$Species[!duplicated(shark_without_no_id_value$Species)], selected = "White shark")),
+br(),
+p("This geographical part helps us to better target the danger zones for swimming and the place where there have been the most shark attacks. This allows us to have a better idea of the distribution of attacks by region, by sub-region, by country but also by the species we choose. In this way, this mapping diagram makes it possible to support our other analyzes on the places that it would be better to avoid for bathing on vacation...")
+),
+
+column(6,
+
+# Map to get the geographical distribution
+leafletOutput("geo_mapping_shark")))),
+
+# ---- fourth section ...
+# Factor Analysis of attacks
+
+tabPanel(h4(class = "tab_title", id = NULL,"Factor Analysis"),
+br(),
+h3("View of the contingency table for Factor Analysis (part of the dataset)"),
+DTOutput("Table_used_for_FCA"),
+p(class = "paragraph_first", id = NULL,"Our factor analysis here is based on a contingent table with two types of categorical variables: 'Injury' and 'Activities'. Our objective is to identify the cause of the attacks and more specifically the area of the body on which the humans were attacked according to the activity they were engaged in at the time of the incident. For this purpose, we used the following subcategories: Arm, Calf, Foot, Hand, Leg, Shoulder, Torso for the variable 'Injury' and Body boarding, Boogie boarding, Diving, Fishing, Snorkeling, Spearfishing, Standing, Swimming, Wading for the 'Activities'. This cross-tabulation allows us to highlight the number of occurrences between the two variables and to interpret the chances of a person with a typical open sea activity being attacked by a shark on a body part."),
+         fluidRow(h3("Eigenvalue based on the five dimensions"),column(6,
+         p("Based on the average eigenvalue and the average explained variance of our analysis about the proportions in difference and contingency on each factor, we can say that we only need one factor for this case study. We see only one factor below 80% of the cumulative variance on the graph, only one possible value on the Kaiser measure (eigenvalue below 1)")),
+         column(6,
+         DTOutput("FCA_eigenvalue"))),
+         fluidRow(h3("Coordinates, contribution and quality of representation of the variables"),column(12,
+         div( id = "FCA_famd_var_div",
+         DTOutput("FCA_famd_var")))),
+         
+         fluidRow(h3("Qualitative and quantitative graph of the Factor Analysis"),column(6,
+         div(class = "section_div", id = NULL,
+         selectInput(inputId = "select_FCA", label = "Select Factor analysis graph :", choices = c("Scree Plot","Contribution plot","Qualitative graph", "Quantitative graph"))),
+         htmlOutput("desc_graph_FCA")),
+         column(6,
+         plotOutput("FCA_plot"))))
+))
+
+# ---- BACK-END / CONTROLER SERVICE ----
+
+server <- function(input, output, session) {
+
+
+get_data_famd <- function() {
+  
+  # ---- FCA PART TO GET THE FAMD -----
+
+# Selecting representative values such as the seven ones for the analysis of injury zone
+  list_of_injuries_cat <-  c("Arm","Calf","Foot","Hand","Leg","Shoulder","Torso")
+
+  # Selecting representative catories in link with suffisent quantity
+  list_of_activities_cat <- c("Fishing","Diving","Body boarding","Snorkeling","Spearfishing","Standing","Surfing","Swimming","Wading","Body boarding","Boogie boarding")
+  
+  # Filter the dataframe to get only the value from the two lists
+  minime_dt <- filter(file_shark, Injury %in% list_of_injuries_cat & Activities %in% list_of_activities_cat)
+  
+
+  # Group them to get the count of injuries belong to the activities 
+  minime_dt <- minime_dt %>%
+        group_by(Injury,Activities) %>%
+        summarise(count = n())
+
+  # Get a contingency table of activities regarding the injuries
+  attack_table_cont <- pivot_wider(minime_dt, names_from = "Activities", values_from = "count")
+
+  # Replace N/A value by zero
+  attack_table_cont[is.na(attack_table_cont)] <- 0
+  
+  #colnames(attack_table_cont)[1] <- NA
+  
+  return(attack_table_cont)
+}  
+
+# FCA RENDER
+
+
+
+output$Table_used_for_FCA <- renderDT({
+    DT::datatable(get_data_famd())
+})
+
+output$age_obs <- renderText({
+  
+  reactive_percentage_value_age()
+  
+})
+
+reactive_text_white_shark <- reactive({
+  
+    text_shark = ""
+  
+  if("White shark" %in% input$mlt_select_shark_spec)
+  {
+  
+   my_white_shark <- file_shark %>%
+    filter(Species != "No identified shark" & Species != "No species") %>%
+    group_by(Year,Species) %>%
+    summarise(count = n()) %>%
+    arrange(Year) %>%
+    group_by(Year) %>%
+    mutate(percent = count/ sum(count) * 100,
+           cumulperc = cumsum(percent))
+   
+   my_white_shark_upd <- my_white_shark %>% filter(Species == "White shark") %>%   arrange(desc(percent))
+   
+  my_white_shark_upd <- head(my_white_shark_upd,5)
+   
+   my_white_shark_year <- my_white_shark_upd[as.numeric(my_white_shark_upd$Year) >= as.numeric(input$rng_shark_att_year[1]) & as.numeric(my_white_shark_upd$Year) <= as.numeric(input$rng_shark_att_year[2]),]
+   
+  my_year <- as.character(my_white_shark_year$Year)
+  percent <- as.character(round(my_white_shark_year$percent,2))
+  
+  text_shark = "<p> "
+    
+  for (y in 1:nrow(my_white_shark_year)) {
+    
+  text_shark = paste0(as.character(text_shark)," <b> ",as.character(y),") </b> Year : ",my_year[y]," <br/>");
+  
+  text_shark = paste0(as.character(text_shark)," % of attack comparing all species : <b>",percent[y]," % attacks </b> <br/>");
+  
+  }
+    
+  text_shark = paste0(text_shark," </p>")
+  
+}else
+{
+ text_shark = "Select a species in the selection bar to see the best statistics appear in the table and on this section"
+}
+  
+  
+})
+
+reactive_text_tiger_shark <- reactive({
+  
+    text_shark = ""
+  
+  if("Tiger shark" %in% input$mlt_select_shark_spec)
+  {
+  
+   my_white_shark <- file_shark %>%
+    filter(Species != "No identified shark" & Species != "No species") %>%
+    group_by(Year,Species) %>%
+    summarise(count = n()) %>%
+    arrange(Year) %>%
+    group_by(Year) %>%
+    mutate(percent = count/ sum(count) * 100,
+           cumulperc = cumsum(percent))
+   
+   my_white_shark_upd <- my_white_shark %>% filter(Species == "Tiger shark") %>%   arrange(desc(percent))
+   
+  my_white_shark_upd <- head(my_white_shark_upd,5)
+   
+   my_white_shark_year <- my_white_shark_upd[as.numeric(my_white_shark_upd$Year) >= as.numeric(input$rng_shark_att_year[1]) & as.numeric(my_white_shark_upd$Year) <= as.numeric(input$rng_shark_att_year[2]),]
+   
+  my_year <- as.character(my_white_shark_year$Year)
+  percent <- as.character(round(my_white_shark_year$percent,2))
+  
+  text_shark = "<p> "
+    
+  for (y in 1:nrow(my_white_shark_year)) {
+    
+  text_shark = paste0(as.character(text_shark)," <b> ",as.character(y),") </b> Year : ",my_year[y]," <br/>");
+  
+  text_shark = paste0(as.character(text_shark)," % of attack comparing all species : <b>",percent[y]," % attacks </b> <br/>");
+  
+  }
+    
+  text_shark = paste0(text_shark," </p>")
+  
+  }else
+{
+ text_shark = "Select a species in the selection bar to see the best statistics appear in the table and on this section"
+}
+  
+})
+
+reactive_text_bull_shark <- reactive({
+  
+  text_shark = ""
+  
+  if("Bull shark" %in% input$mlt_select_shark_spec)
+  {
+  
+   my_white_shark <- file_shark %>%
+    filter(Species != "No identified shark" & Species != "No species") %>%
+    group_by(Year,Species) %>%
+    summarise(count = n()) %>%
+    arrange(Year) %>%
+    group_by(Year) %>%
+    mutate(percent = count/ sum(count) * 100,
+           cumulperc = cumsum(percent))
+   
+   my_white_shark_upd <- my_white_shark %>% filter(Species == "Bull shark") %>%   arrange(desc(percent))
+   
+  my_white_shark_upd <- head(my_white_shark_upd,5)
+   
+   my_white_shark_year <- my_white_shark_upd[as.numeric(my_white_shark_upd$Year) >= as.numeric(input$rng_shark_att_year[1]) & as.numeric(my_white_shark_upd$Year) <= as.numeric(input$rng_shark_att_year[2]),]
+   
+  my_year <- as.character(my_white_shark_year$Year)
+  percent <- as.character(round(my_white_shark_year$percent,2))
+  
+  text_shark = "<p> "
+    
+  for (y in 1:nrow(my_white_shark_year)) {
+    
+  text_shark = paste0(as.character(text_shark)," <b> ",as.character(y),") </b> Year : ",my_year[y]," <br/>");
+  
+  text_shark = paste0(as.character(text_shark)," % of attack comparing all species : <b>",percent[y]," % attacks </b> <br/>");
+  
+  }
+    
+  text_shark = paste0(text_shark," </p>")
+  
+  }else
+{
+ text_shark = "Select a species in the selection bar to see the best statistics appear in the table and on this section"
+}
+  
+})
+
+reactive_text_blacktip <- reactive({
+  
+  text_shark = ""
+  
+  if("Blacktip shark" %in% input$mlt_select_shark_spec)
+  {
+    
+   my_white_shark <- file_shark %>%
+    filter(Species != "No identified shark" & Species != "No species") %>%
+    group_by(Year,Species) %>%
+    summarise(count = n()) %>%
+    arrange(Year) %>%
+    group_by(Year) %>%
+    mutate(percent = count/ sum(count) * 100,
+           cumulperc = cumsum(percent))
+   
+   my_white_shark_upd <- my_white_shark %>% filter(Species == "Blacktip shark") %>%   arrange(desc(percent))
+   
+  my_white_shark_upd <- head(my_white_shark_upd,5)
+   
+   my_white_shark_year <- my_white_shark_upd[as.numeric(my_white_shark_upd$Year) >= as.numeric(input$rng_shark_att_year[1]) & as.numeric(my_white_shark_upd$Year) <= as.numeric(input$rng_shark_att_year[2]),]
+   
+  my_year <- as.character(my_white_shark_year$Year)
+  percent <- as.character(round(my_white_shark_year$percent,2))
+  
+  text_shark = "<p> "
+    
+  for (y in 1:nrow(my_white_shark_year)) {
+    
+  text_shark = paste0(as.character(text_shark)," <b> ",as.character(y),") </b> Year : ",my_year[y]," <br/>");
+  
+  text_shark = paste0(as.character(text_shark)," % of attack comparing all species : <b>",percent[y]," % attacks </b> <br/>");
+  
+  }
+  
+  text_shark = paste0(text_shark," </p>")
+  
+  }else
+{
+ text_shark = "Select a species in the selection bar to see the best statistics appear in the table and on this section"
+}
+  
+})
+
+output$white_shark_form <- renderText({
+  
+  reactive_text_white_shark()
+  
+})
+
+output$tiger_shark_form <- renderText({
+  
+  reactive_text_tiger_shark()
+  
+})
+
+change_graph_FCA_choice <- reactive({
+  
+  paragraph_to_fca <- ""
+  
+  switch(input$select_FCA, 
+"Scree Plot"={
+  paragraph_to_fca <- "<p><h5>Scree Plot</h5><br/>This graph shows us the interest of taking into account <b>three factors (Dim1. at 47.3%, Dim2. at 22.2% and Dim3. at 8.6%)</b> in order to ensure that there are enough dimensions to study the correlation phenomena between the data.</p>"
+},
+"Contribution plot"={
+   paragraph_to_fca <- "<p><h5>Contribution Plot</h5><br/>The contribution of our dataset is provided by eight out of eleven subcategories. Only we cannot delete <b> 'Fishing', 'Diving', 'Spearfishing' </b> because they symbolize highly practiced activities and it is important in our case to study their correlation with accidents.</p>"
+},
+"Quantitative graph"={
+  paragraph_to_fca <- "<p><h5>Quantitative graph</h5><br/>This last graph offers us a final conclusion on our FCA analysis. We observe that the original variables are positively correlated with between them, the first principal component defines <b>a “size effect”</b>. We therefore know that there is a leading component which is positively correlated with all the variables and a second principal component which distinguishes individuals by referring to a norm. We have two very distinct groups, those who do 'Spearfishing', 'Diving', 'Fishing' and 'Snorkeling' (group 1) then the group of those who do 'Body boarding', 'Swimming', 'Standing' , 'Boogie boarding', 'Surfing' and 'Wading' (group 2). By analyzing the two groups, we see that the difference takes place on the members 'Arm', 'Leg' and 'Torso' for group 1 and 'Calf', 'Foot', 'Hand' and 'Shoulder' for the group 2. For example, this would mean that a person who snorkels would be more likely to be bitten in the arm, leg or torso than a person who surfs (who would be attacked in the calf , foot, hand or shoulder.</p>"
+},
+"Qualitative graph"={
+  paragraph_to_fca <- "<p><h5>Qualitative graph</h5><br/>This graph provides crucial information on the cause and effect analysis of shark attacks on humans at sea. On the basis of the variable 'Injury', we note that the body parts contributing most to the contingency are 'Foot' first, then 'Leg' and finally 'Arm', 'Torso' and 'Shoulder'. The greatest interpretation will therefore be on the differentiation of activities according to attacks on the victim's <b>foot or leg</b>. Two very similar parts of the body, but which must prove to be very different depending on the shark's attack mode and the activity practised by the individual!</>"
+})
+  
+  })
+
+
+output$desc_graph_FCA <- renderText({
+  change_graph_FCA_choice()
+})
+
+output$bull_shark_form <- renderText({
+  
+  reactive_text_bull_shark()
+  
+})
+
+output$blacktip_form <- renderText({
+  
+  reactive_text_blacktip()
+  
+})
+
+output$time_obs <- renderText({
+  
+  reactive_percentage_value_time()
+  
+})
+
+reactive_percentage_value_age <- reactive({
+  
+  age_eval <- shark_without_no_id_value %>%
+    filter(SubRegion == input$selectedsubregiontime & Age != "No information" & Time != "AM" & Time != "PM" & Time != "No information") %>%
+    group_by(Age) %>%
+    summarise(count = n()) %>%
+    arrange(desc(count)) %>%
+    mutate(percent = count/ sum(count) * 100)
+
+  age_eval <- head(age_eval,5)
+  
+  Age <- as.character(age_eval$Age)
+  Percent <- as.character(round(age_eval$percent,2))
+  
+  text_response = "<p> "
+    
+  for (x in 1:nrow(age_eval)) {
+    
+  text_response = paste0(as.character(text_response),"<b>", as.character(x),") </b> Age : ",Age[x]," years old <br/>");
+  
+  text_response = paste0(as.character(text_response),"% of attack in the sub-region : <b>",Percent[x]," % chance </b> <br/>");
+  
+  }
+    
+  text_response = paste0(text_response," </p>")
+  
+})
+
+reactive_percentage_value_time <- reactive({
+  
+  time_eval <- shark_without_no_id_value %>%
+    filter(SubRegion == input$selectedsubregiontime & Age != "No information" & Time != "AM" & Time != "PM" & Time != "No information") %>%
+    group_by(Time) %>%
+    summarise(count = n()) %>%
+    arrange(desc(count)) %>%
+    mutate(percent = count/ sum(count) * 100)
+  
+  time_eval <- head(time_eval,5)
+  
+  Time <- as.character(time_eval$Time)
+  Percent <- as.character(round(time_eval$percent,2))
+  
+  text_response = "<p> "
+    
+  for (x in 1:nrow(time_eval)) {
+    
+  text_response = paste0(as.character(text_response),"<b>", as.character(x),") </b> Time : ",Time[x]," <br/>");
+  
+  text_response = paste0(as.character(text_response),"% of attack in the sub-region : <b>",Percent[x]," % chance </b> <br/>");
+  
+  }
+    
+  text_response = paste0(text_response," </p>")
+  
+})
+
+reactive_subreg_time <- reactive({
+
+  value <- shark_without_no_id_value %>% filter(Age != "No information" & Time != "AM" & Time != "PM" & Time != "No information" & SubRegion == input$selectedsubregiontime)
+  
+})
+
+output$Image_menu <- renderImage({
+  list(src = "www/dents.jpg")
+}, deleteFile = F)
+
+output$white_shark_img <- renderImage({
+
+    if("White shark" %in% input$mlt_select_shark_spec)
+    {
+  
+    list(src = list_shark_img[["White shark"]])
+      
+    }else
+    {
+    list(src = "www/transparent.png")
+    }
+    
+  }, deleteFile = F)
+
+#START
+output$img_form_shark <- renderText({
+  
+  test <- '<div> </div>'
+  
+})
+
+output$tiger_shark_img <- renderImage({
+  
+    if("Tiger shark" %in% input$mlt_select_shark_spec)
+    {
+    
+    list(src = list_shark_img[["Tiger shark"]])
+       
+    }else
+    {
+    list(src = "www/transparent.png")
+    }
+    
+  }, deleteFile = F)
+
+output$bull_shark_img <- renderImage({
+    
+    if("Bull shark" %in% input$mlt_select_shark_spec)
+    {
+      
+    list(src = list_shark_img[["Bull shark"]])
+      
+    }else
+    {
+    list(src = "www/transparent.png")
+    }
+    
+  }, deleteFile = F)
+
+output$blacktip_img <- renderImage({
+    
+    if("Blacktip shark" %in% input$mlt_select_shark_spec)
+    {
+        
+    list(src = list_shark_img[["Blacktip shark"]])
+    }else
+    {
+    list(src = "www/transparent.png")
+    }
+    
+  }, deleteFile = F)
+
+output$FCA_famd_var <- renderDT({
+  
+  data_acc <- get_data_famd()
+  value <- FAMD(data_acc, graph = TRUE)
+  
+  famd_var <- data.frame(value$var)
+  
+  #colnames(famd_var)[1] <- 'Actvities'
+  
+  colnames(famd_var)[colnames(famd_var) == "coord.Dim.1"] = "Coord (Dim1)"
+  colnames(famd_var)[colnames(famd_var) == "coord.Dim.2"] = "Coord (Dim2)"
+  colnames(famd_var)[colnames(famd_var) == "coord.Dim.3"] = "Coord (Dim3)"
+  colnames(famd_var)[colnames(famd_var) == "coord.Dim.4"] = "Coord (Dim4)"
+  colnames(famd_var)[colnames(famd_var) == "coord.Dim.5"] = "Coord (Dim5)"
+          
+  colnames(famd_var)[colnames(famd_var) == "contrib.Dim.1"] = "Cont (Dim1)"
+  colnames(famd_var)[colnames(famd_var) == "contrib.Dim.2"] = "Cont (Dim2)"
+  colnames(famd_var)[colnames(famd_var) == "contrib.Dim.3"] = "Cont (Dim3)"
+  colnames(famd_var)[colnames(famd_var) == "contrib.Dim.4"] = "Cont (Dim4)"
+  colnames(famd_var)[colnames(famd_var) == "contrib.Dim.5"] = "Cont (Dim5)"
+  
+  colnames(famd_var)[colnames(famd_var) == "cos2.Dim.1"] = "Qual (Dim1)"
+  colnames(famd_var)[colnames(famd_var) == "cos2.Dim.2"] = "Qual (Dim2)"
+  colnames(famd_var)[colnames(famd_var) == "cos2.Dim.3"] = "Qual (Dim3)"
+  colnames(famd_var)[colnames(famd_var) == "cos2.Dim.4"] = "Qual (Dim4)"
+  colnames(famd_var)[colnames(famd_var) == "cos2.Dim.5"] = "Qual (Dim5)"
+  
+  famd_change <- data.frame(lapply(famd_var, function(x) if(is.numeric(x)) round(x, 5) else x))
+  
+  DT::datatable(famd_change,options = list(autoWidth = TRUE, columnDefs = list(list(width = '50px', targets = "_all")),scrollX = TRUE))
+  
+})
+
+output$FCA_eigenvalue <- renderDT({
+  data_acc <- get_data_famd()
+  value <- FAMD(data_acc, graph = TRUE)
+  eig.val <- get_eigenvalue(value)
+  eigenvalue <- eig.val
+  
+  #colnames(eigenvalue)[1] <- 'Dimension'
+  
+  colnames(eigenvalue)[colnames(eigenvalue) == "eigenvalue"] = "Eigenvalue"
+  colnames(eigenvalue)[colnames(eigenvalue) == "variance.percent"] ="Variance percentage"
+  colnames(eigenvalue)[colnames(eigenvalue) == "cumulative.variance.percent"] ="Cumulative variance percentage"
+  
+  DT::datatable(eigenvalue)
+
+})
+
+get_scree <- function() {
+
+library("factoextra")
+library("FactoMineR")
+  
+data_acc <- get_data_famd()
+value_FAMD <- NULL
+value_FAMD <- FAMD(data_acc, graph = TRUE) 
+fviz_screeplot(value_FAMD)
+
+}
+
+get_contrib <- function() {
+
+library("factoextra")
+library("FactoMineR")
+  
+data_acc <- get_data_famd()
+value_FAMD <- NULL
+value_FAMD <- FAMD(data_acc, graph = TRUE) 
+fviz_contrib(value_FAMD, "var", axes = 1)
+
+}
+
+get_indi <- function(){
+  
+library("factoextra")
+library("FactoMineR")
+  
+data_acc <- get_data_famd()
+value_FAMD <- NULL
+value_FAMD <- FAMD(data_acc, graph = TRUE) 
+fviz_famd_ind(value_FAMD, col.ind = "cos2", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE)
+}
+
+get_quanti <- function() {
+
+library("factoextra")
+library("FactoMineR")
+  
+data_acc <- get_data_famd()
+value_FAMD <- NULL
+value_FAMD <- FAMD(data_acc, graph = TRUE) 
+fviz_famd_var(value_FAMD, "quanti.var", col.var = "black")
+
+}
+
+get_quali <- function() {
+
+library("factoextra")
+library("FactoMineR")  
+  
+data_acc <- get_data_famd()
+value_FAMD <- NULL
+value_FAMD <- FAMD(data_acc, graph = TRUE) 
+fviz_famd_var(value_FAMD, "quali.var", col.var = "contrib", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"))
+}
+
+
+reactive_event <- eventReactive( input$select_FCA, {
+  
+  switch(input$select_FCA, 
+"Scree Plot"={
+  get_scree()
+},
+"Contribution plot"={
+  get_contrib()  
+},
+"Quantitative graph"={
+  get_quanti()
+},
+"Qualitative graph"={
+  get_quali()
+})
+  
+  })
+
+output$FCA_plot <- renderPlot({
+  reactive_event()
+})
+
+first_total <- reactive({ fsta <- file_shark %>% filter(input$Fst_choice_compare_cntry_shark == Country) %>% nrow()
+ fsta
+return(fsta) })
+
+second_total <- reactive({ scda <- file_shark %>% filter(input$Snd_choice_compare_cntry_shark == Country) %>% nrow()
+ scda
+return(scda)})
+      
+first_type <- reactive({ fst <- file_shark %>% filter(input$Fst_choice_compare_cntry_shark == Country) 
+fst
+return(fst)})
+
+second_type <- reactive({ scd <- file_shark %>% filter(input$Snd_choice_compare_cntry_shark == Country) 
+scd
+return(scd)})
+  
+output$dist_cntries_type <- renderPlot({
+      
+ggplot(data.frame(Country=c(input$Fst_choice_compare_cntry_shark,input$Snd_choice_compare_cntry_shark),Attacks = c(first_total(),second_total()),provoked = c(first_type()$Type,second_type()$Type))) + geom_col() + theme_minimal()
+
+  })
+
+output$dist_cntries_year <- renderPlot({
+  
+  file_shark %>%
+  ggplot(aes(x = Year, fill = Region)) + geom_bar() +
+  scale_fill_manual(values = c("#FF4536", "#FDB42C", "#61BC4D", "#5195D8", "#B064C2","#CEE4C2","#FF3264")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + labs(x = "Year (from 2000 to today)", y = "Total amount of shark attacks", color = "World region")
+
+})
+
+url <- a("Sharkattackfile.net", href="https://www.sharkattackfile.net/incidentlog.htm")
+output$link_old_dt <- renderUI({
+tagList("Link URL to the old dataset (reviewed after) : ", url)
+    })
+
+output$dist_cntries_hours <- renderPlot({
+  
+  value <- reactive_subreg_time()
+  
+  value %>%
+  ggplot(aes(x = value$Time, y = as.numeric(as.character(value$Age)), color = value$Country)) + geom_point() + scale_color_brewer(palette = "Spectral") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ labs(x = "Year", y = "Age of individual", color="Country")
+
+})
+output$dist_species_activities <- renderPlot({
+
+  shark_without_no_id_value %>%
+  filter(Species %in% c("White shark","Tiger shark","Bull shark","Blacktip shark")) %>%
+  group_by(Region) %>%
+  ggplot(aes(x = Region, y = Species)) + geom_point(stat = 'identity') + theme_minimal() + 
+  geom_text_repel(aes(label = Activities), vjust = 0, nudge_y = 0.5, stat = "unique")+ labs(x = "World region", y = "Shark species")
+
+})
+
+output$dist_time_region_plot <- renderPlot({
+
+verify <- shark_without_no_id_value %>%
+  group_by(Year) %>%
+  summarise(count = n())  
+  
+shark_without_no_id_value %>%
+  group_by(Region, Year) %>%
+  summarise(total = n()) %>%
+  ggplot(aes(x = as.numeric(as.character(Year)), y = total, color = Region)) + geom_line() + geom_point() + labs(x = "Year (from 2000 to 2023)", y = "Total attacks")
+})
+
+
+
+output$table_shark_attack_year <- DT::renderDT({
+
+if("White shark" %in% input$mlt_select_shark_spec)
+{
+  get_table_info_shark["White shark"] <- data_add_info_shark["White shark"]
+  
+  get_table_info_shark <- get_table_info_shark[,colnames(get_table_info_shark)[c(1,ncol(get_table_info_shark),2:(ncol(get_table_info_shark)-1))]]
+}
+if("Tiger shark" %in% input$mlt_select_shark_spec)
+{
+  get_table_info_shark["Tiger shark"] <- data_add_info_shark["Tiger shark"]
+  
+  get_table_info_shark <- get_table_info_shark[,colnames(get_table_info_shark)[c(1,ncol(get_table_info_shark),2:(ncol(get_table_info_shark)-1))]]
+}
+if("Bull shark" %in% input$mlt_select_shark_spec)
+{
+  get_table_info_shark["Bull shark"] <- data_add_info_shark["Bull shark"]
+  
+  get_table_info_shark <- get_table_info_shark[,colnames(get_table_info_shark)[c(1,ncol(get_table_info_shark),2:(ncol(get_table_info_shark)-1))]]
+}
+if("Blacktip shark" %in% input$mlt_select_shark_spec)
+{
+ 
+  get_table_info_shark["Blacktip shark"] <- data_add_info_shark["Blacktip shark"]
+  
+  get_table_info_shark <- get_table_info_shark[,colnames(get_table_info_shark)[c(1,ncol(get_table_info_shark),2:(ncol(get_table_info_shark)-1))]]
+
+}
+
+get_table_info_shark_upd_time  <- get_table_info_shark[get_table_info_shark$Year >= input$rng_shark_att_year[1] & get_table_info_shark$Year <= input$rng_shark_att_year[2],]
+
+  DT::datatable(get_table_info_shark_upd_time,selection = "none", extensions = 'Buttons', options = list(lengthMenu = list(c(5, 12, 19), c('5', '12', '19')),pageLength = 5))
+  
+  })
+
+# Get the shark with the most attack in sea
+
+get_max_attack_shark <- reactive({ 
+  
+  shark_attack_max <- shark_without_no_id_value %>%
+                    group_by(Species) %>%
+                    summarise(count = n()) %>%
+                    arrange(desc(count))
+  
+  shark_attack_max <- head(shark_attack_max,4)
+
+})
+
+
+output$first_bigest_predator <- renderValueBox({
+  
+  valueBox(
+  value = tags$p(paste0("1st : ", get_max_attack_shark()$Species[1]), style = "font-size: 60%;"),
+  subtitle = paste0("Total of ",get_max_attack_shark()$count[1]," attacks"),
+  icon = icon("fish"),
+  color = "red",
+  href = NULL)
+})
+
+output$second_bigest_predator <- renderValueBox({
+
+  valueBox(
+  value = tags$p(paste0("2nd : ", get_max_attack_shark()$Species[2]), style = "font-size: 60%;"),
+  subtitle = paste0("Total of ",get_max_attack_shark()$count[2]," attacks"),
+  icon = icon("fish"),
+  color = "orange",
+  href = NULL)
+})
+
+output$third_bigest_predator <- renderValueBox({
+
+  valueBox(
+  value = tags$p(paste0("3rd : ", get_max_attack_shark()$Species[3]), style = "font-size: 60%;"),
+  subtitle = paste0("Total of ",get_max_attack_shark()$count[3]," attacks"),
+  icon = icon("fish"),
+  color = "yellow",
+  href = NULL)
+})
+
+output$fourth_bigest_predator <- renderValueBox({
+
+  valueBox(
+  value = tags$p(paste0("4th : ", get_max_attack_shark()$Species[4]), style = "font-size: 60%;"),
+  subtitle = paste0("Total of ",get_max_attack_shark()$count[4]," attacks"),
+  icon = icon("fish"),
+  color = "green",
+  href = NULL)
+})
+
+change_zone_format_map <- reactive({ 
+ 
+  cm <- 0
+    
+ if(input$selectedformatworldmap == "Countries"){
+   
+    cm <- shark_without_no_id_value %>% 
+    group_by(Country,Latitude,Longitude) %>%
+    summarise(countSha = n())
+    
+    dm <- shark_without_no_id_value %>%
+    filter(input$selectedsharkworldmap == Species) %>%
+    group_by(Country) %>%
+    summarise(countSpe = n())
+    
+    cm <- merge(cm,dm, by="Country",all=TRUE)
+    
+    cm[is.na(cm)] <- 0
+    
+    names(cm)[names(cm) == 'Country'] <- 'Pos'
+    names(cm)[names(cm) == 'Longitude'] <- 'Long'
+    names(cm)[names(cm) == 'Latitude'] <- 'Lat'
+ 
+  }
+
+ if(input$selectedformatworldmap == "Regions"){
+   
+    
+    cm <- shark_without_no_id_value %>% group_by(Region,Latregion,Longregion) %>%
+    summarise(countSha = n())
+
+    dm <- shark_without_no_id_value %>%
+    filter(input$selectedsharkworldmap == Species) %>%
+    group_by(Region) %>%
+    summarise(countSpe = n())
+    
+    cm <- merge(cm,dm, by="Region",all=TRUE)
+    
+    cm[is.na(cm)] <- 0
+    
+    names(cm)[names(cm) == 'Region'] <- 'Pos'  
+    names(cm)[names(cm) == 'Longregion'] <- 'Long'
+    names(cm)[names(cm) == 'Latregion'] <- 'Lat'
+ 
+ }
+  
+if(input$selectedformatworldmap == "Sub-regions"){
+    
+    cm <- shark_without_no_id_value %>%
+    group_by(SubRegion,Latsubregion,Longsubregion) %>%
+    summarise(countSha = n())
+    
+    dm <- shark_without_no_id_value %>%
+    filter(input$selectedsharkworldmap == Species) %>%
+    group_by(SubRegion) %>%
+    summarise(countSpe = n())
+    
+    cm <- merge(cm,dm, by="SubRegion",all=TRUE)
+    
+    cm[is.na(cm)] <- 0
+    
+    names(cm)[names(cm) == 'SubRegion'] <- 'Pos'  
+    names(cm)[names(cm) == 'Longsubregion'] <- 'Long'
+    names(cm)[names(cm) == 'Latsubregion'] <- 'Lat'
+  
+}
+    
+    return(cm)
+
+})
+
+output$geo_mapping_shark <- renderLeaflet({
+    
+leaflet() %>% addProviderTiles("OpenStreetMap") %>% addCircleMarkers(data = change_zone_format_map(),lng = ~change_zone_format_map()$Long, lat= ~change_zone_format_map()$Lat, label=paste0("Number of attacks in ",change_zone_format_map()$Pos," : ",change_zone_format_map()$countSha), radius = ~sqrt(change_zone_format_map()$countSha),stroke = FALSE, fillOpacity = 0.5, color ="green") %>% addCircleMarkers(data = change_zone_format_map(),lng = ~change_zone_format_map()$Long, lat= ~change_zone_format_map()$Lat, label=paste0(change_zone_format_map()$Pos," - Made by ",input$selectedsharkworldmap," : ",change_zone_format_map()$countSpe), radius = ~sqrt(change_zone_format_map()$countSpe),stroke = FALSE, fillOpacity = 0.5, color ="yellow")
+  
+  })
+
+}
+
+shinyApp(ui, server)
+
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
